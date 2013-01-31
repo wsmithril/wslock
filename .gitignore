@@ -1,0 +1,4 @@
+wslock
+a.out
+*.o
+.syntastic_c_config
