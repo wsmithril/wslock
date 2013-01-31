@@ -11,15 +11,16 @@ Installation
 
     make
 
-Needs root privilege to set `suid` primission properly if not using PAM to
-auth.
+Needs root privilege to set `setuid` primission properly if not using PAM to
+auth. `wslock` needs root to read from shadow file for hashed password.
+
 
 Usage:
 --------
 
 Just
 
-   ./wslock
+    ./wslock
 
 and then input your password then `Enter` to exit.
 
