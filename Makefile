@@ -1,8 +1,8 @@
 CC = gcc
-CFLAGS  = $(shell pkg-config --cflags xcb xcb-dpms xcb-keysyms) -O2 -Wall -std=c99 -g
-LDFLAGS = $(shell pkg-config --libs   xcb xcb-dpms xcb-keysyms) -lcrypt -lm
+CFLAGS  = $(shell pkg-config --cflags xcb xcb-dpms xcb-keysyms cairo) -O2 -Wall -std=c99 -g
+LDFLAGS = $(shell pkg-config --libs   xcb xcb-dpms xcb-keysyms cairo) -lcrypt -lm
 
-OBJECTS = wslock.o timer.o
+OBJECTS = wslock.o timer.o lock_screen.o
 
 UID := $(shell id -u)
 
@@ -13,9 +13,11 @@ all: show-cfg wslock
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-wslock.c: timer.h
+wslock.c: timer.h lock_screen.h
 
 timer.c: timer.h
+
+lock_screen.c: lock_screen.h
 
 wslock: $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@

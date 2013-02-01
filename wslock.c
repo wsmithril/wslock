@@ -1,7 +1,9 @@
 #if !defined(USE_PAM)
+// crypt() is not in POSIX standard, but we needs it to auth without PAM
 #   define _XOPEN_SOURCE 500
 #endif
 
+#include <unistd.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -28,8 +30,7 @@
 #   include <xcb/dpms.h>
 #endif
 
-#include <unistd.h>
-
+#include "lock_screen.h"
 #include "timer.h"
 
 static xcb_connection_t * xcb_conn = NULL;
@@ -95,13 +96,15 @@ static int check_pass(const char * p1, const char * p2) {
 
 typedef struct {
     xcb_window_t lock_window;
+    xcb_screen_t * screen;
 } lock_t;
 
 static void lock(xcb_connection_t * c, lock_t * lock, const int ns);
-static void unlock(xcb_connection_t * c, lock_t * lock, const int ns);
 static void read_passwd(xcb_connection_t * c, const char * passwd,
         const lock_t * lock, const int ns);
 
+
+// this function is stolen from i3lock, with some modification
 static void clear_memory(char * p, const size_t s) {
     // using volatile pointer and fill the coresponding memory with random
     // data to prevent these call being optmized out
@@ -135,6 +138,8 @@ int main(const int argc, const char * argv[]) {
         die("Cannot drop root privileges"
             "I'll just die here before doing anything.\n");
     }
+#else // init PAM
+    // TODO: init PAM
 #endif
 
     // init xcb connections
@@ -144,6 +149,11 @@ int main(const int argc, const char * argv[]) {
 
     int nscreen = xcb_setup_roots_length(xcb_get_setup(xcb_conn));
     lock_t * locks = calloc(nscreen, sizeof(lock_t));
+
+    // init colors
+    color_lock  = COLOR_LOCK;
+    color_input = COLOR_INPUT;
+    color_wrong = COLOR_WRONG;
 
     // lock everything
     lock(xcb_conn, locks, nscreen);
@@ -173,16 +183,6 @@ int main(const int argc, const char * argv[]) {
     return 0;
 }
 
-inline static uint32_t rgb_to_uint32(const char * hex) {
-    char strgroups[3][3] = {{hex[0], hex[1], '\0'},
-                            {hex[2], hex[3], '\0'},
-                            {hex[4], hex[5], '\0'}};
-    uint32_t rgb16[3] = {(strtol(strgroups[0], NULL, 16)),
-                         (strtol(strgroups[1], NULL, 16)),
-                         (strtol(strgroups[2], NULL, 16))};
-    return (rgb16[0] << 16) + (rgb16[1] << 8) + rgb16[2];
-}
-
 static void set_window_ontop(xcb_connection_t * c, xcb_window_t w) {
     uint32_t mask = 0;
     uint32_t values[1];
@@ -191,18 +191,17 @@ static void set_window_ontop(xcb_connection_t * c, xcb_window_t w) {
     mask = XCB_CONFIG_WINDOW_STACK_MODE;
     values[0] = XCB_STACK_MODE_ABOVE;
     xcb_configure_window(c, w, mask, values);
-
 }
 
 static xcb_window_t new_fullscreen_window(xcb_connection_t * c,
-        xcb_screen_t * s, const char * color) {
+        xcb_screen_t * s, const uint32_t color) {
     uint32_t mask = 0;
     uint32_t values[3];
 
     xcb_window_t win = xcb_generate_id(c);
 
     mask |= XCB_CW_BACK_PIXEL;
-    values[0] = rgb_to_uint32(color);
+    values[0] = color;
 
     mask |= XCB_CW_OVERRIDE_REDIRECT;
     values[1] = 1;
@@ -227,8 +226,9 @@ static xcb_window_t new_fullscreen_window(xcb_connection_t * c,
     return win;
 }
 
+// TODO: still have media keys grabbed...
 static void grab_everything_excpt_mediakey(
-        xcb_connection_t * c, xcb_screen_t * s){
+            xcb_connection_t * c, xcb_screen_t * s){
     xcb_grab_pointer_cookie_t  pc;
     xcb_grab_pointer_reply_t * pr;
 
@@ -266,15 +266,14 @@ static void lock(xcb_connection_t * c, lock_t * locks, const int ns) {
     xcb_screen_iterator_t iter  = xcb_setup_roots_iterator(xcb_setup);
     int i = 0;
 
-   char color[] = "101010";
-
     // iterate through screens
     for (i = 0; i < ns; i++) {
         xcb_screen_t * s = iter.data;
         xcb_change_window_attributes(c, s->root, XCB_CW_EVENT_MASK,
                 (uint32_t[]) { XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 
-        locks[i].lock_window = new_fullscreen_window(c, s, color);
+        locks[i].lock_window = new_fullscreen_window(c, s, color_lock);
+        locks[i].screen      = s;
         grab_everything_excpt_mediakey(c, s);
         xcb_screen_next(&iter);
     }
@@ -318,12 +317,16 @@ static int deal_with_key_press(
     int ret = pass_not_check;
 
     switch (ks) {
+        case XK_Escape:
+            pass_input[0] = 0;
+            *pos = 0;
+            break;
         case XK_Return:
         case XK_KP_Enter:
             pass_input[*pos] = 0;
-            *pos = 0;
             ret = check_pass(pass_input, pass_sys)? pass_auth_fail
                                                   : pass_auth_succ;
+            *pos = 0;
             break;
         case XK_BackSpace:
         case XK_Delete:
@@ -343,7 +346,7 @@ static int deal_with_key_press(
 static void read_passwd(xcb_connection_t * c, const char * pass,
         const lock_t * locks, const int ns) {
     // init mainloop timers
-    wtimer_t * idle_timer = wtimer_new(5 * Sec, idle_cb, WTIMER_ONESHOT);
+    wtimer_t * idle_timer = wtimer_new(5 * Sec, idle_cb, WTIMER_REPEAT);
     wtimer_list_t * tl = wtimer_list_new();
     wtimer_add(tl, idle_timer);
 
@@ -410,6 +413,7 @@ static void read_passwd(xcb_connection_t * c, const char * pass,
                     // unless some window sets itself on-top of the stack
                     for (i = 0; i < ns; i++)
                         set_window_ontop(c, locks[i].lock_window);
+                    xcb_flush(c);
                     break;
                 case XCB_KEY_PRESS:
                     ret = deal_with_key_press(
@@ -424,14 +428,23 @@ static void read_passwd(xcb_connection_t * c, const char * pass,
                             break;
                     }
 
-                    if (!pass_pos) dpms_off(c);
+                    for (i = 0; i < ns; i++) {
+                        // TODO: update lock screen
+                        ret == pass_auth_fail?
+                            lock_screen_error(c, locks[i].screen,
+                                    locks[i].lock_window):
+                            lock_screen_input(c, locks[i].screen,
+                                    locks[i].lock_window, pass_pos);
+                    }
+
+                    xcb_flush(c);
 
                     // reset timer
-                    wtimer_rearm(idle_timer, 0, NULL);
                     break;
                 }
 next:
                 free(event);
+                wtimer_rearm(idle_timer, 0, NULL);
             }
         } else if (ntimer) { // we got timeouts
         } else {
