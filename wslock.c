@@ -150,11 +150,6 @@ int main(const int argc, const char * argv[]) {
     int nscreen = xcb_setup_roots_length(xcb_get_setup(xcb_conn));
     lock_t * locks = calloc(nscreen, sizeof(lock_t));
 
-    // init colors
-    color_lock  = COLOR_LOCK;
-    color_input = COLOR_INPUT;
-    color_wrong = COLOR_WRONG;
-
     // lock everything
     lock(xcb_conn, locks, nscreen);
 
