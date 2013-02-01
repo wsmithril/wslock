@@ -23,6 +23,7 @@ typedef struct wtimer_t wtimer_t;
 enum wtimer_option_t {
     WTIMER_ONESHOT = 1L << 0,
     WTIMER_ONCE    = 1L << 1,
+    WTIMER_REPEAT  = 1L << 2,
 };
 
 typedef struct {
