@@ -19,7 +19,7 @@ Usage:
 
 Just
 
-   ./wslock
+    ./wslock
 
 and then input your password then `Enter` to exit.
 
