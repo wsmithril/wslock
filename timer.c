@@ -6,6 +6,10 @@
 #include <sys/time.h>
 #include "timer.h"
 
+#ifdef __TEST_WTIMER__
+#include <stdio.h>
+#endif
+
 static uint32_t global_id = 0;
 
 inline
@@ -19,12 +23,13 @@ wtimer_list_t * wtimer_list_new(void) {
     return tl;
 }
 
-wtimer_t * wtimer_new(uint64_t us, wtimer_cb cb, uint32_t op) {
+wtimer_t * wtimer_new(const uint64_t us, wtimer_cb cb,
+        const enum wtimer_type_t type) {
     wtimer_t * nt = calloc(1, sizeof(wtimer_t));
     nt->id      = global_id++;
     nt->timeout = us;
     nt->cb      = cb;
-    nt->op      = op;
+    nt->type    = type;
     return nt;
 }
 
@@ -61,27 +66,42 @@ int wtimer_list_timeout(wtimer_list_t * tl, const struct timeval * now) {
     if (!tl->status) return -1;
 
     int count = 0;
-    wtimer_t * t = NULL, * t_prev = NULL;
+#ifdef __TEST_WTIMER__
+    int count_all = 0;
+#endif
+    wtimer_t ** t = NULL;
 
-    for (t = tl->head; t; t_prev = t, t = t->next) {
-        if (t->status && t->timeout < timeval_diff(now, &t->started)) {
+    for (t = &tl->head; *t; ) {
+#ifdef __TEST_WTIMER__
+        count_all++;
+#endif
+        wtimer_t * et = *t;
+        int del = 0;
+
+        if (et->status && et->timeout < timeval_diff(now, &et->started)) {
             count++;
-            (*t->cb)(t, now); // call wtimer_cb
+            (*et->cb)(et, now); // call wtimer_cb
 
             // remove timer from the list or reset its timeout??
-            if (t->op & WTIMER_ONCE) {
-                if (!t_prev) tl->head = t->next;
-                else t_prev->next = t->next;
-                t->status = wt_suspend;
-            } else if (t->op & WTIMER_ONESHOT) {
-                t->status = wt_suspend;
-            } else {
-                // not remove from list
-                memcpy(&t->started, now, sizeof(struct timeval));
+            switch (et->type) {
+                case WTIMER_TYPE_ONCE:
+                    *t = et->next;
+                    et->status = wt_suspend;
+                    del = 1;
+                    break;
+                case WTIMER_TYPE_ONESHOT:
+                    et->status = wt_suspend;
+                    break;
+                case WTIMER_TYPE_REPEAT:
+                    memcpy(&et->started, now, sizeof(struct timeval));
             }
         }
-    }
 
+        if (!del) t = &et->next;
+    }
+#ifdef __TEST_WTIMER__
+    printf("%d timer in list, %d running\n", count_all, count);
+#endif
     return count;
 }
 
@@ -109,7 +129,6 @@ void wtimer_list_start(wtimer_list_t * tl) {
 }
 
 #ifdef __TEST_WTIMER__
-#include <stdio.h>
 
 void to_cb(const wtimer_t * t, const struct timeval * now) {
     printf("timeout on %d at %d.%ds\n", t->id, now->tv_sec, now->tv_usec);
@@ -117,14 +136,14 @@ void to_cb(const wtimer_t * t, const struct timeval * now) {
 
 int main(void) {
     wtimer_list_t * tl = wtimer_list_new();
-    wtimer_t * t1 = wtimer_new(4000000, to_cb, WTIMER_ONESHOT);
+    wtimer_t * t1 = wtimer_new(4000000, to_cb, WTIMER_TYPE_ONCE);
     wtimer_add(tl, t1);
-    wtimer_t * t2 = wtimer_new(3000000, to_cb, WTIMER_ONESHOT);
+    wtimer_t * t2 = wtimer_new(3000000, to_cb, WTIMER_TYPE_ONESHOT);
     wtimer_add(tl, t2);
 
     wtimer_list_start(tl);
-
-    while (1) {
+    int i = 0;
+    while (i ++ < 10) {
         int64_t to;
         struct timeval now;
         gettimeofday(&now, NULL);
@@ -136,6 +155,10 @@ int main(void) {
         printf("next timeout in %8.6fs\n", to * 1.0 / 1000000);
         usleep(to);
     }
+
+    free(tl);
+    free(t1);
+    free(t2);
 }
 
 #endif
