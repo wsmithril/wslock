@@ -24,12 +24,13 @@ wtimer_list_t * wtimer_list_new(void) {
 }
 
 wtimer_t * wtimer_new(const uint64_t us, wtimer_cb cb,
-        const enum wtimer_type_t type) {
+        const enum wtimer_type_t type, const uint32_t op) {
     wtimer_t * nt = calloc(1, sizeof(wtimer_t));
     nt->id      = global_id++;
     nt->timeout = us;
     nt->cb      = cb;
     nt->type    = type;
+    nt->op      = op;
     return nt;
 }
 
@@ -38,6 +39,7 @@ void wtimer_add(wtimer_list_t * tl, wtimer_t * t) {
     tl->head = t;
     // start the timer if the timer list is running
     if (tl->status) gettimeofday(&t->started, NULL);
+    t->status = t->op & WTIMER_OP_INITSUSPEND? wt_suspend: wt_running;
 }
 
 int64_t wtimer_list_next_timeout(
@@ -94,6 +96,7 @@ int wtimer_list_timeout(wtimer_list_t * tl, const struct timeval * now) {
                     break;
                 case WTIMER_TYPE_REPEAT:
                     memcpy(&et->started, now, sizeof(struct timeval));
+                    break;
             }
         }
 
@@ -124,7 +127,7 @@ void wtimer_list_start(wtimer_list_t * tl) {
     tl->status = tl_running;
     for (t = tl->head; t; t = t->next) {
         memcpy(&t->started, &now, sizeof(struct timeval));
-        t->status = wt_running;
+        t->status = t->op & WTIMER_OP_INITSUSPEND? wt_suspend: wt_running;
     }
 }
 
@@ -136,9 +139,11 @@ void to_cb(const wtimer_t * t, const struct timeval * now) {
 
 int main(void) {
     wtimer_list_t * tl = wtimer_list_new();
-    wtimer_t * t1 = wtimer_new(4000000, to_cb, WTIMER_TYPE_ONCE);
+    wtimer_t * t1 = wtimer_new(4000000, to_cb,
+            WTIMER_TYPE_ONCE, WTIMER_OP_DEFAULT);
     wtimer_add(tl, t1);
-    wtimer_t * t2 = wtimer_new(3000000, to_cb, WTIMER_TYPE_ONESHOT);
+    wtimer_t * t2 = wtimer_new(3000000, to_cb,
+            WTIMER_TYPE_ONESHOT, WTIMER_OP_INITSUSPEND);
     wtimer_add(tl, t2);
 
     wtimer_list_start(tl);
