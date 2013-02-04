@@ -5,9 +5,10 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
-struct wtimer_t;
+typedef struct wtimer_t wtimer_t;
+typedef struct wtimer_list_t wtimer_list_t;
 
-typedef void (*wtimer_cb)(struct wtimer_t * t, const struct timeval * now);
+typedef void (*wtimer_cb)(wtimer_t * t, const struct timeval * now);
 
 enum wtimer_type_t {
     WTIMER_TYPE_ONESHOT = 1L << 0,
@@ -20,24 +21,7 @@ enum wtimer_option_t {
     WTIMER_OP_INITSUSPEND = 1L << 1,
 };
 
-struct wtimer_t {
-    uint32_t id;
-    uint64_t timeout;
-    uint32_t op;
-    enum wtimer_type_t type;
-    enum { wt_suspend = 0, wt_running = 1 } status;
-    wtimer_cb cb;
-    struct timeval started;
-    struct wtimer_t * next;
-};
-typedef struct wtimer_t wtimer_t;
-
-typedef struct {
-    wtimer_t * head;
-    enum { tl_pause = 0, tl_running = 1 } status;
-} wtimer_list_t;
-
-wtimer_list_t * wtimer_list_new(void);
+wtimer_list_t * wtimer_list_new(const uint32_t res);
 wtimer_t * wtimer_new(const uint64_t us, wtimer_cb cb,
         const enum wtimer_type_t type, const uint32_t op);
 void wtimer_add(wtimer_list_t * tl, wtimer_t * t);
