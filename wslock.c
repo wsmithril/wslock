@@ -99,10 +99,11 @@ typedef struct {
     xcb_screen_t * screen;
 } lock_t;
 
-static void lock(xcb_connection_t * c, lock_t * lock, const int ns);
-static void read_passwd(xcb_connection_t * c, const char * passwd,
-        const lock_t * lock, const int ns);
+static lock_t * locks = NULL;
+static int ns;
 
+static void lock(xcb_connection_t * c);
+static void read_passwd(xcb_connection_t * c, const char * passwd);
 
 // this function is stolen from i3lock, with some modification
 static void clear_memory(char * p, const size_t s) {
@@ -147,11 +148,11 @@ int main(const int argc, const char * argv[]) {
     if(!xcb_conn || xcb_connection_has_error(xcb_conn))
         die("unable to open xcb connection, just die here\n");
 
-    int nscreen = xcb_setup_roots_length(xcb_get_setup(xcb_conn));
-    lock_t * locks = calloc(nscreen, sizeof(lock_t));
+    ns = xcb_setup_roots_length(xcb_get_setup(xcb_conn));
+    locks = calloc(ns, sizeof(lock_t));
 
     // lock everything
-    lock(xcb_conn, locks, nscreen);
+    lock(xcb_conn);
 
 #if !defined(NO_DPMS)
     dpms_off(xcb_conn);
@@ -162,9 +163,9 @@ int main(const int argc, const char * argv[]) {
 
     // read password, blocked till we should unlock
 #if defined(USE_PAM)
-    read_passwd(xcb_conn, NULL, locks, nscreen);
+    read_passwd(xcb_conn, NULL);
 #else
-    read_passwd(xcb_conn, user_pass, locks, nscreen);
+    read_passwd(xcb_conn, user_pass);
 #endif
 
     // free everything
@@ -255,7 +256,7 @@ static void grab_everything_excpt_mediakey(
     }
 }
 
-static void lock(xcb_connection_t * c, lock_t * locks, const int ns) {
+static void lock(xcb_connection_t * c) {
     // lock each screen, one by one
     const xcb_setup_t * xcb_setup = xcb_get_setup(c);
     xcb_screen_iterator_t iter  = xcb_setup_roots_iterator(xcb_setup);
@@ -267,14 +268,14 @@ static void lock(xcb_connection_t * c, lock_t * locks, const int ns) {
         xcb_change_window_attributes(c, s->root, XCB_CW_EVENT_MASK,
                 (uint32_t[]) { XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 
-        locks[i].lock_window = new_fullscreen_window(c, s, color_lock);
+        locks[i].lock_window = new_fullscreen_window(c, s, COLOR_LOCK);
         locks[i].screen      = s;
         grab_everything_excpt_mediakey(c, s);
         xcb_screen_next(&iter);
     }
 }
 
-void idle_cb(const wtimer_t * t, const struct timeval * now) {
+void idle_cb(wtimer_t * t, const struct timeval * now) {
     dpms_off(xcb_conn);
 }
 
@@ -337,13 +338,25 @@ static int deal_with_key_press(
     return ret;
 }
 
+wtimer_t * pass_wrong_timer = NULL;
+
+static void pass_wrong_cb(wtimer_t * t, const struct timeval * now) {
+    int i = 0;
+    for (i = 0; i < ns; i++)
+        lock_screen_input(xcb_conn, locks[i].screen, locks[i].lock_window, 0);
+    xcb_flush(xcb_conn);
+}
+
 #define Sec (1000 * 1000)
-static void read_passwd(xcb_connection_t * c, const char * pass,
-        const lock_t * locks, const int ns) {
+static void read_passwd(xcb_connection_t * c, const char * pass) {
     // init mainloop timers
-    wtimer_t * idle_timer = wtimer_new(5 * Sec, idle_cb, WTIMER_TYPE_REPEAT);
-    wtimer_list_t * tl = wtimer_list_new();
+    wtimer_list_t * tl = wtimer_list_new(0);
+    wtimer_t * idle_timer = wtimer_new(5 * Sec, idle_cb,
+            WTIMER_TYPE_REPEAT, WTIMER_OP_DEFAULT);
     wtimer_add(tl, idle_timer);
+    pass_wrong_timer = wtimer_new(3 * Sec, pass_wrong_cb,
+            WTIMER_TYPE_ONESHOT, WTIMER_OP_INITSUSPEND);
+    wtimer_add(tl, pass_wrong_timer);
 
     // init keysym
     xcb_key_symbols_t * ksyms = xcb_key_symbols_alloc(c);
@@ -388,12 +401,12 @@ static void read_passwd(xcb_connection_t * c, const char * pass,
         gettimeofday(now, NULL);
 
         to = wtimer_list_next_timeout(tl, now); // how long shall we wait
+
         if (to > 0) to /= 1000;
         nev = epoll_wait(epoll_fd, &ev, 1, to); // then we will wait
 
         // check and trigger timeouts
         ntimer = wtimer_list_timeout(tl, now);
-
 
         if (nev) { // we got xcb events
             xcb_generic_event_t * event;

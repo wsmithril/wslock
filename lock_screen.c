@@ -3,10 +3,13 @@
 #include <cairo/cairo-xcb.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <stdio.h>
+
 #include "lock_screen.h"
+#include "timer.h"
 
 #define MIN(x, y) ((x) > (y)? (y): (x))
+
+extern wtimer_t * pass_wrong_timer;
 
 static xcb_visualtype_t * get_root_visualitype(xcb_screen_t * s) {
     xcb_depth_iterator_t depth_iter;
@@ -39,11 +42,11 @@ static void draw_stripes(cairo_t * cc,
         const uint16_t space, const char * text) {
 
     cairo_set_source_uint32(cc, fg);
-    cairo_set_font_size(cc, 120);
+    cairo_set_font_size(cc, 60);
     cairo_select_font_face(cc, "Sans",
             CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 
-    // calculate text and strip size
+    // calculate text and stripe size
     uint16_t x = 0, y = 0, w = 0, h = 0;
     cairo_text_extents_t te;
     cairo_text_extents(cc, text, &te);
@@ -54,7 +57,7 @@ static void draw_stripes(cairo_t * cc,
     y = (height - h) / 2;
 
     // dwar the strip
-    int i = 0, nstripe = ((w + h) / space) / 2;
+    int i = 0, nstripe = ((w + h) / space) / 2 + 1;
     for (i = 0; i < nstripe; i++) {
         uint16_t x1 = space * (i * 2 + 1);
         uint16_t y1 = x1 > w? x1 - w: 0;
@@ -95,7 +98,7 @@ void lock_screen_input(xcb_connection_t * c, xcb_screen_t * s,
             s->width_in_pixels, s->height_in_pixels);
     cairo_t * xcb_cc = cairo_create(xcb_cs);
 
-    cairo_set_source_uint32(xcb_cc, len? color_input: color_lock);
+    cairo_set_source_uint32(xcb_cc, len? COLOR_INPUT: COLOR_LOCK);
 
     cairo_rectangle(xcb_cc, 0, 0, s->width_in_pixels, s->height_in_pixels);
     cairo_fill(xcb_cc);
@@ -114,20 +117,17 @@ void lock_screen_error(xcb_connection_t * c, xcb_screen_t * s,
     cairo_t * xcb_cc = cairo_create(xcb_cs);
 
     // draw a red background
-    cairo_set_source_uint32(xcb_cc, color_wrong);
+    cairo_set_source_uint32(xcb_cc, COLOR_WRONG);
     cairo_rectangle(xcb_cc, 0, 0, s->width_in_pixels, s->height_in_pixels);
     cairo_fill(xcb_cc);
 
     draw_stripes(xcb_cc, s->width_in_pixels, s->height_in_pixels,
-            0xefcf20, color_wrong, WARN_S, "ACESS DENIED");
+            0xefcf20, COLOR_WRONG, STRIPE_WIDTH, "ACESS DENIED");
 
     xcb_flush(c);
 
-    // wait for 1 sec
-    sleep(2);
-
-    // return to normal lock screen
-    lock_screen_input(c, s, w, 0);
+    // reset pass_wrong timer
+    wtimer_rearm(pass_wrong_timer, 0, NULL);
 
     cairo_surface_destroy(xcb_cs);
     cairo_destroy(xcb_cc);

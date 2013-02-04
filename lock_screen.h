@@ -5,16 +5,16 @@
 #include <stdint.h>
 
 // default color config
-#if !defined color_lock
-#   define color_lock (uint32_t)(0x101010)
+#if !defined COLOR_LOCK
+#   define COLOR_LOCK (uint32_t)(0x101010)
 #endif
 
-#if !defined color_input
-#   define color_input (uint32_t)(0x4e7aa7)
+#if !defined COLOR_INPUT
+#   define COLOR_INPUT (uint32_t)(0x4e7aa7)
 #endif
 
-#if !defined color_wrong
-#   define color_wrong (uint32_t)(0x9c3200)
+#if !defined COLOR_WRONG
+#   define COLOR_WRONG (uint32_t)(0x9c3200)
 #endif
 
 void lock_screen_input(xcb_connection_t * c, xcb_screen_t * s,
@@ -22,16 +22,8 @@ void lock_screen_input(xcb_connection_t * c, xcb_screen_t * s,
 void lock_screen_error(xcb_connection_t * c, xcb_screen_t * s,
         xcb_window_t w);
 
-#if !defined WARN_W
-#   define WARN_W 400
-#endif
-
-#if !defined WARN_H
-#   define WARN_H 200
-#endif
-
-#if !defined WARN_S
-#   define WARN_S 12
+#if !defined STRIPE_WIDTH
+#   define STRIPE_WIDTH 17
 #endif
 
 #endif
