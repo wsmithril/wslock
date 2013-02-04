@@ -341,7 +341,7 @@ static int deal_with_key_press(
 static void read_passwd(xcb_connection_t * c, const char * pass,
         const lock_t * locks, const int ns) {
     // init mainloop timers
-    wtimer_t * idle_timer = wtimer_new(5 * Sec, idle_cb, WTIMER_REPEAT);
+    wtimer_t * idle_timer = wtimer_new(5 * Sec, idle_cb, WTIMER_TYPE_REPEAT);
     wtimer_list_t * tl = wtimer_list_new();
     wtimer_add(tl, idle_timer);
 
