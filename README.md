@@ -11,8 +11,14 @@ Installation
 
     make
 
-Needs root privilege to set `setuid` primission properly if not using PAM to
+Needs root privilege to set `setuid` permission properly if not using PAM to
 auth. `wslock` needs root to read from shadow file for hashed password.
+
+You may run
+
+    make setsuid
+
+with root to set permissions properly.
 
 
 Usage:
