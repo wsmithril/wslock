@@ -6,6 +6,8 @@ OBJECTS = wslock.o timer.o lock_screen.o
 
 UID := $(shell id -u)
 
+PREFIX = /usr/local
+
 .PHONY: all clean wslock setsuid
 
 all: show-cfg wslock
@@ -22,11 +24,9 @@ lock_screen.c: lock_screen.h
 wslock: $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
 
-setsuid: wslock
-	strip $<
-	@ [ $(UID) -eq 0 ] || ( echo Form here on, we needs root && exit 1 )
-	@ echo "[ROOT]: chown root:root" $< && chown root:root $<
-	@ echo "[ROOT]: chmod u+s" $<       && chmod u+s $<
+install: wslock
+	cp $< $(PREFIX)/bin/$<
+	chmod u+s $(PREFIX)/bin/$<
 
 show-cfg:
 	@ echo "Complie configuration:"
