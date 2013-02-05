@@ -421,7 +421,6 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
                     // unless some window sets itself on-top of the stack
                     for (i = 0; i < ns; i++)
                         set_window_ontop(c, locks[i].lock_window);
-                    xcb_flush(c);
                     break;
                 case XCB_KEY_PRESS:
                     ret = deal_with_key_press(
@@ -444,12 +443,9 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
                             lock_screen_input(c, locks[i].screen,
                                     locks[i].lock_window, pass_pos);
                     }
-
-                    xcb_flush(c);
-
-                    // reset timer
                     break;
                 }
+                xcb_flush(c);
 next:
                 free(event);
                 wtimer_rearm(idle_timer, 0, NULL);

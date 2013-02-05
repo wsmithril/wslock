@@ -42,7 +42,7 @@ static void draw_stripes(cairo_t * cc,
         const uint16_t space, const char * text) {
 
     cairo_set_source_uint32(cc, fg);
-    cairo_set_font_size(cc, 60);
+    cairo_set_font_size(cc, TEXT_SIZE);
     cairo_select_font_face(cc, "Sans",
             CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 
@@ -59,19 +59,21 @@ static void draw_stripes(cairo_t * cc,
     // dwar the strip
     int i = 0, nstripe = ((w + h) / space) / 2 + 1;
     for (i = 0; i < nstripe; i++) {
-        uint16_t x1 = space * (i * 2 + 1);
+        uint16_t x1 = space * (i * 2 + 1.5);
         uint16_t y1 = x1 > w? x1 - w: 0;
-        uint16_t x2 = space * (i * 2);
+        uint16_t x2 = space * (i * 2 + 0.5);
         uint16_t y2 = x2 > w? x2 - w: 0;
-        uint16_t y3 = space * (i * 2);
+        uint16_t y3 = space * (i * 2 + 0.5);
         uint16_t x3 = y3 > h? y3 - h: 0;
-        uint16_t y4 = space * (i * 2 + 1);
+        uint16_t y4 = space * (i * 2 + 1.5);
         uint16_t x4 = y4 > h? y4 - h: 0;
 
         cairo_move_to(cc, x + MIN(x1, w), y + y1);
+        if (y2 == 0 && y1 != 0) cairo_line_to(cc, x + w, y);
         cairo_line_to(cc, x + MIN(x2, w), y + y2);
-        cairo_line_to(cc, x + x3,         y + MIN(y3, h));
-        cairo_line_to(cc, x + x4,         y + MIN(y4, h));
+        cairo_line_to(cc, x + x3, y + MIN(y3, h));
+        if (x3 == 0 && x4 != 0) cairo_line_to(cc, x, y + h);
+        cairo_line_to(cc, x + x4, y + MIN(y4, h));
         cairo_close_path(cc);
     }
     cairo_fill(cc);
@@ -89,6 +91,47 @@ static void draw_stripes(cairo_t * cc,
     cairo_show_text(cc, text);
 }
 
+void draw_input_box(cairo_t * cc,
+        const uint16_t width, const uint16_t height,
+        const uint32_t fg,    const uint32_t bg,
+        const uint32_t pad,   const int len) {
+    // U+25CF BLACK CIRCLE, UTF-8 encoding
+    static const char dot[] = {0xE2, 0x97, 0x8F, 0x00};
+    cairo_set_font_size(cc, TEXT_SIZE * 0.75);
+    cairo_select_font_face(cc, "Sans",
+            CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+
+    cairo_text_extents_t te;
+    cairo_text_extents(cc, dot, &te);
+
+    // draw the outer box
+    uint16_t x = 0, y = 0, w = 0, h = 0;
+    w = te.width * (MIN(len, PASS_SHOW_LEN)) +
+        pad      * (MIN(len, PASS_SHOW_LEN) - 1) +
+        te.height;
+    h = te.height * 2;
+    x = (width -  w) / 2;
+    y = (height - h) / 2;
+
+    cairo_set_source_uint32(cc, fg);
+    cairo_rectangle(cc, x, y, w, h);
+    cairo_set_line_width(cc, TEXT_SIZE / 10);
+    cairo_stroke(cc);
+
+    // draw text
+    int i = 0;
+    w = te.width * (MIN(len, PASS_SHOW_LEN)) +
+        pad      * (MIN(len, PASS_SHOW_LEN) - 1);
+    h = te.height;
+    x = (width -  w) / 2;
+    y = (height - h) / 2;
+    for (i = 0; i < len; i++) {
+        cairo_move_to(cc,
+            x + i * (te.width + pad) - te.x_bearing, y - te.y_bearing);
+        cairo_show_text(cc, dot);
+    }
+}
+
 void lock_screen_input(xcb_connection_t * c, xcb_screen_t * s,
         xcb_window_t w, const int len) {
     // cached visual_type
@@ -103,6 +146,8 @@ void lock_screen_input(xcb_connection_t * c, xcb_screen_t * s,
     cairo_rectangle(xcb_cc, 0, 0, s->width_in_pixels, s->height_in_pixels);
     cairo_fill(xcb_cc);
 
+    if (len) draw_input_box(xcb_cc, s->width_in_pixels, s->height_in_pixels,
+            COLOR_INPUT_FG, COLOR_INPUT, TEXT_SIZE / 5, len);
     cairo_surface_destroy(xcb_cs);
     cairo_destroy(xcb_cc);
 }
@@ -122,9 +167,7 @@ void lock_screen_error(xcb_connection_t * c, xcb_screen_t * s,
     cairo_fill(xcb_cc);
 
     draw_stripes(xcb_cc, s->width_in_pixels, s->height_in_pixels,
-            0xefcf20, COLOR_WRONG, STRIPE_WIDTH, "ACESS DENIED");
-
-    xcb_flush(c);
+            COLOR_WRONG_FG, COLOR_WRONG, STRIPE_WIDTH, "ACESS DENIED");
 
     // reset pass_wrong timer
     wtimer_rearm(pass_wrong_timer, 0, NULL);
