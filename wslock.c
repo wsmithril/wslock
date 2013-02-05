@@ -414,37 +414,42 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
                 if (!event->response_type) goto next;
                 int type = (event->response_type & 0x7f);
                 int i = 0, ret = 0;
-
+#define foreach_screen for (i = 0; i < ns; i++)
                 switch (type) {
-                case XCB_CIRCULATE_NOTIFY:
-                    // this shouldn't be happening...
-                    // unless some window sets itself on-top of the stack
-                    for (i = 0; i < ns; i++)
-                        set_window_ontop(c, locks[i].lock_window);
-                    break;
-                case XCB_KEY_PRESS:
-                    ret = deal_with_key_press(
-                            (xcb_key_press_event_t *)event, ksyms,
-                            pass_input, &pass_pos, pass);
+                    case XCB_CIRCULATE_NOTIFY:
+                        // this shouldn't be happening...
+                        // unless some window sets itself on-top of the stack
+                        foreach_screen
+                            set_window_ontop(c, locks[i].lock_window);
+                        break;
 
-                    switch (ret) {
-                        case pass_auth_succ: exit_now = 1; break;
-                        case pass_auth_fail: // TODO: flash screen
-                        case pass_not_check: // TODO: indicator
-                        default:
-                            break;
-                    }
+                    case XCB_KEY_PRESS:
+                        ret = deal_with_key_press(
+                                (xcb_key_press_event_t *)event, ksyms,
+                                pass_input, &pass_pos, pass);
 
-                    for (i = 0; i < ns; i++) {
-                        // TODO: update lock screen
-                        ret == pass_auth_fail?
-                            lock_screen_error(c, locks[i].screen,
-                                    locks[i].lock_window):
-                            lock_screen_input(c, locks[i].screen,
-                                    locks[i].lock_window, pass_pos);
-                    }
-                    break;
+                        switch (ret) {
+                            case pass_auth_succ:
+                                exit_now = 1;
+                                break;
+
+                            case pass_auth_fail:
+                                foreach_screen
+                                    lock_screen_error(c, locks[i].screen,
+                                        locks[i].lock_window);
+                                break;
+
+                            case pass_not_check:
+                                foreach_screen
+                                    lock_screen_input(c, locks[i].screen,
+                                        locks[i].lock_window, pass_pos);
+                                break;
+                        }
+                        break;
+
+                    default: break;
                 }
+#undef foreach_screen
                 xcb_flush(c);
 next:
                 free(event);
