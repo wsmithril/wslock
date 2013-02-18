@@ -32,7 +32,7 @@
 #include "timer.h"
 
 // global variables
-char * pass_input = NULL;
+static char * pass_input = NULL;
 static xcb_connection_t * xcb_conn = NULL;
 
 typedef struct {
@@ -42,6 +42,7 @@ typedef struct {
 
 static lock_t * locks = NULL;
 static int ns;
+static int  pass_pos = 0;
 
 #if !defined(NO_DPMS)
 static void dpms_off(xcb_connection_t * c) {
@@ -98,8 +99,9 @@ static int check_pass(const char * p1, const char * p2) {
     return strcmp(crypt(p1, p2), p2);
 }
 
-#else // TODO: pam part
+#else
 static pam_handle_t * pamh = NULL;
+static char * username = NULL;
 
 static int pam_conv_func(int nmsg, const struct pam_message ** msg,
         struct pam_response ** resp, void * data) {
@@ -109,12 +111,8 @@ static int pam_conv_func(int nmsg, const struct pam_message ** msg,
     for (i = 0; i < nmsg; i++) {
         if (msg[i]->msg_style == PAM_PROMPT_ECHO_OFF ||
             msg[i]->msg_style == PAM_PROMPT_ECHO_ON) {
-
             (*resp)[i].resp = calloc(MAX_PASSLEN, sizeof(char));
-            if (!(mlock((*resp)[i].resp, sizeof(char) * MAX_PASSLEN))) {
-                // if mlock failed, we should not duplicate the pass_input
-                strcpy((*resp)[i].resp, pass_input);
-            }
+            strcpy((*resp)[i].resp, pass_input);
         }
     }
 
@@ -124,8 +122,7 @@ static int pam_conv_func(int nmsg, const struct pam_message ** msg,
 static struct pam_conv pam_conv = {pam_conv_func, NULL};
 
 static int check_pass() {
-    int ret = pam_authenticate(pamh, 0);
-    return ret == PAM_SUCCESS? 0: 1;
+    return pam_authenticate(pamh, 0) == PAM_SUCCESS? 0: 1;
 }
 
 #endif /* NO_PAM */
@@ -168,8 +165,8 @@ int main(const int argc, const char * argv[]) {
             "I'll just die here before doing anything.\n");
     }
 #else // init PAM
-    // username = getenv("USER");
-    if ((ret = pam_start("wslock-password", "nobody", &pam_conv, &pamh))
+    username = getenv("USER");
+    if ((ret = pam_start("wslock-password", username, &pam_conv, &pamh))
                 != PAM_SUCCESS) {
         perror("pam_start()");
         die("unable to start PAM auth");
@@ -382,7 +379,7 @@ wtimer_t * pass_wrong_timer = NULL;
 static void pass_wrong_cb(wtimer_t * t, const struct timeval * now) {
     int i = 0;
     for (i = 0; i < ns; i++)
-        lock_screen_input(xcb_conn, locks[i].screen, locks[i].lock_window, 0);
+        lock_screen_input(xcb_conn, locks[i].screen, locks[i].lock_window, pass_pos);
     xcb_flush(xcb_conn);
 }
 
@@ -420,7 +417,6 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
 
     // prepare memory to store user input
     pass_input = calloc(MAX_PASSLEN, sizeof(char));
-    int  pass_pos = 0;
     // user input in plain text, should prevent it from being swapped to disk
     if (mlock(pass_input, sizeof(char) * MAX_PASSLEN)) {
         perror("mlock()");
@@ -459,7 +455,8 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
 
         // check and trigger timeouts
         ntimer = wtimer_list_timeout(tl, now);
-        if (ntimer);
+        if (ntimer)
+            ;
 
         if (nev) { // we got xcb events
             xcb_generic_event_t * event;
