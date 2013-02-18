@@ -1,4 +1,4 @@
-CC = gcc
+CC = clang
 PKG_DEVEL = xcb xcb-dpms xcb-keysyms cairo
 
 CFLAGS  = $(shell pkg-config --cflags $(PKG_DEVEL)) -O2 \
@@ -25,9 +25,9 @@ lock_screen.c: lock_screen.h
 wslock: $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
 
-install: wslock
-	cp $< $(PREFIX)/bin/$<
-	#chmod u+s $(PREFIX)/bin/$<
+install: wslock wslock-password
+	install wslock $(PREFIX)/bin
+	install wslock-password /etc/pam.d -m 644
 
 show-cfg:
 	@ echo "Complie configuration:"
