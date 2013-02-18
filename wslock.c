@@ -1,7 +1,5 @@
-#if !defined(USE_PAM)
-// crypt() is not in POSIX standard, but we needs it to auth without PAM
-#   define _XOPEN_SOURCE 500
-#endif
+// crypt() and usleep() is not in POSIX standard, but we need them
+#define _XOPEN_SOURCE 500
 
 #include <unistd.h>
 #include <errno.h>
@@ -33,7 +31,17 @@
 #include "lock_screen.h"
 #include "timer.h"
 
+// global variables
+char * pass_input = NULL;
 static xcb_connection_t * xcb_conn = NULL;
+
+typedef struct {
+    xcb_window_t lock_window;
+    xcb_screen_t * screen;
+} lock_t;
+
+static lock_t * locks = NULL;
+static int ns;
 
 #if !defined(NO_DPMS)
 static void dpms_off(xcb_connection_t * c) {
@@ -91,16 +99,36 @@ static int check_pass(const char * p1, const char * p2) {
 }
 
 #else // TODO: pam part
+static pam_handle_t * pamh = NULL;
+
+static int pam_conv_func(int nmsg, const struct pam_message ** msg,
+        struct pam_response ** resp, void * data) {
+    int i = 0;
+    *resp = calloc(nmsg, sizeof(struct pam_response));
+
+    for (i = 0; i < nmsg; i++) {
+        if (msg[i]->msg_style == PAM_PROMPT_ECHO_OFF ||
+            msg[i]->msg_style == PAM_PROMPT_ECHO_ON) {
+
+            (*resp)[i].resp = calloc(MAX_PASSLEN, sizeof(char));
+            if (!(mlock((*resp)[i].resp, sizeof(char) * MAX_PASSLEN))) {
+                // if mlock failed, we should not duplicate the pass_input
+                strcpy((*resp)[i].resp, pass_input);
+            }
+        }
+    }
+
+    return PAM_SUCCESS;
+}
+
+static struct pam_conv pam_conv = {pam_conv_func, NULL};
+
+static int check_pass() {
+    int ret = pam_authenticate(pamh, 0);
+    return ret == PAM_SUCCESS? 0: 1;
+}
 
 #endif /* NO_PAM */
-
-typedef struct {
-    xcb_window_t lock_window;
-    xcb_screen_t * screen;
-} lock_t;
-
-static lock_t * locks = NULL;
-static int ns;
 
 static void lock(xcb_connection_t * c);
 static void read_passwd(xcb_connection_t * c, const char * passwd);
@@ -140,7 +168,12 @@ int main(const int argc, const char * argv[]) {
             "I'll just die here before doing anything.\n");
     }
 #else // init PAM
-    // TODO: init PAM
+    // username = getenv("USER");
+    if ((ret = pam_start("wslock-password", "nobody", &pam_conv, &pamh))
+                != PAM_SUCCESS) {
+        perror("pam_start()");
+        die("unable to start PAM auth");
+    }
 #endif
 
     // init xcb connections
@@ -173,6 +206,8 @@ int main(const int argc, const char * argv[]) {
 #if !defined(USE_PAM)
     clear_memory(user_pass, MAX_PASSLEN);
     free(user_pass);
+#else
+    pam_end(pamh, 0);
 #endif
     free(locks);
 
@@ -320,8 +355,12 @@ static int deal_with_key_press(
         case XK_Return:
         case XK_KP_Enter:
             pass_input[*pos] = 0;
+#if defined(USE_PAM)
+            ret = check_pass()? pass_auth_fail: pass_auth_succ;
+#else
             ret = check_pass(pass_input, pass_sys)? pass_auth_fail
                                                   : pass_auth_succ;
+#endif
             *pos = 0;
             break;
         case XK_BackSpace:
@@ -380,7 +419,7 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
     }
 
     // prepare memory to store user input
-    char * pass_input = calloc(MAX_PASSLEN, sizeof(char));
+    pass_input = calloc(MAX_PASSLEN, sizeof(char));
     int  pass_pos = 0;
     // user input in plain text, should prevent it from being swapped to disk
     if (mlock(pass_input, sizeof(char) * MAX_PASSLEN)) {

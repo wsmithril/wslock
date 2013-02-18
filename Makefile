@@ -1,10 +1,11 @@
 CC = gcc
-CFLAGS  = $(shell pkg-config --cflags xcb xcb-dpms xcb-keysyms cairo) -O2 -Wall -std=c99 -g
-LDFLAGS = $(shell pkg-config --libs   xcb xcb-dpms xcb-keysyms cairo) -lcrypt -lm
+PKG_DEVEL = xcb xcb-dpms xcb-keysyms cairo
+
+CFLAGS  = $(shell pkg-config --cflags $(PKG_DEVEL)) -O2 \
+          -Wall -std=c99 -g -DUSE_PAM
+LDFLAGS = $(shell pkg-config --libs $(PKG_DEVEL)) -lcrypt -lm -lpam
 
 OBJECTS = wslock.o timer.o lock_screen.o
-
-UID := $(shell id -u)
 
 PREFIX = /usr/local
 
@@ -26,7 +27,7 @@ wslock: $(OBJECTS)
 
 install: wslock
 	cp $< $(PREFIX)/bin/$<
-	chmod u+s $(PREFIX)/bin/$<
+	#chmod u+s $(PREFIX)/bin/$<
 
 show-cfg:
 	@ echo "Complie configuration:"
