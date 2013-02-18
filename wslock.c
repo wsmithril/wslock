@@ -404,16 +404,31 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
 
         if (to > 0) to /= 1000;
         nev = epoll_wait(epoll_fd, &ev, 1, to); // then we will wait
+        switch (errno) {
+            case EBADF:
+            case EINVAL:
+                // fd to xcb connection became unusable, maybe X crashed
+                // we should exit now.
+                perror("Cannot perform epoll on xcb connection fd, "
+                       "Maybe X just crached. epoll_wait()");
+                exit_now = 1;
+            case EINTR:
+                // just epoll again
+                continue;
+            default: break;
+        }
 
         // check and trigger timeouts
         ntimer = wtimer_list_timeout(tl, now);
+        if (ntimer);
 
         if (nev) { // we got xcb events
             xcb_generic_event_t * event;
             while ((event = xcb_poll_for_event(c))) {
-                if (!event->response_type) goto next;
+                if (!event->response_type) goto next_event;
                 int type = (event->response_type & 0x7f);
                 int i = 0, ret = 0;
+
 #define foreach_screen for (i = 0; i < ns; i++)
                 switch (type) {
                     case XCB_CIRCULATE_NOTIFY:
@@ -451,13 +466,10 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
                 }
 #undef foreach_screen
                 xcb_flush(c);
-next:
+next_event:
                 free(event);
                 wtimer_rearm(idle_timer, 0, NULL);
             }
-        } else if (ntimer) { // we got timeouts
-        } else {
-            // why on earth we've been waken up???
         }
     }
 
