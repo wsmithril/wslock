@@ -16,14 +16,12 @@ struct wtimer_t {
     struct timeval started;
     struct wtimer_t * next;
 };
-typedef struct wtimer_t wtimer_t;
 
 struct wtimer_list_t {
     wtimer_t * head;
     uint32_t   res;
     enum { tl_pause = 0, tl_running = 1 } status;
 };
-typedef struct wtimer_list_t wtimer_list_t;
 
 static uint32_t global_id = 0;
 
