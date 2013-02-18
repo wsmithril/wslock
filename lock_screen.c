@@ -104,11 +104,10 @@ void draw_input_box(cairo_t * cc,
     cairo_text_extents_t te;
     cairo_text_extents(cc, dot, &te);
 
+    int show_len = MIN(len, PASS_SHOW_LEN);
     // draw the outer box
     uint16_t x = 0, y = 0, w = 0, h = 0;
-    w = te.width * (MIN(len, PASS_SHOW_LEN)) +
-        pad      * (MIN(len, PASS_SHOW_LEN) - 1) +
-        te.height;
+    w = te.width * show_len + pad * (show_len - 1) + te.height;
     h = te.height * 2;
     x = (width -  w) / 2;
     y = (height - h) / 2;
@@ -120,12 +119,11 @@ void draw_input_box(cairo_t * cc,
 
     // draw text
     int i = 0;
-    w = te.width * (MIN(len, PASS_SHOW_LEN)) +
-        pad      * (MIN(len, PASS_SHOW_LEN) - 1);
+    w = te.width * show_len + pad * (show_len - 1);
     h = te.height;
     x = (width -  w) / 2;
     y = (height - h) / 2;
-    for (i = 0; i < len; i++) {
+    for (i = 0; i < show_len; i++) {
         cairo_move_to(cc,
             x + i * (te.width + pad) - te.x_bearing, y - te.y_bearing);
         cairo_show_text(cc, dot);
