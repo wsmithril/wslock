@@ -9,7 +9,7 @@ OBJECTS = wslock.o timer.o lock_screen.o
 
 PREFIX = /usr/local
 
-.PHONY: all clean wslock setsuid
+.PHONY: all clean setsuid
 
 all: show-cfg wslock
 

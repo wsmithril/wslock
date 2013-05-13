@@ -57,7 +57,7 @@ static void draw_stripes(cairo_t * cc,
     y = (height - h) / 2;
 
     // dwar the strip
-    int i = 0, nstripe = ((w + h) / space) / 2 + 1;
+    int i = 0, nstripe = ((w + h) / space + 1) / 2;
     for (i = 0; i < nstripe; i++) {
         uint16_t x1 = space * (i * 2 + 1.5);
         uint16_t y1 = x1 > w? x1 - w: 0;

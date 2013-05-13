@@ -501,8 +501,8 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
                     default: break;
                 }
 #undef foreach_screen
-                xcb_flush(c);
 next_event:
+                xcb_flush(c);
                 free(event);
                 wtimer_rearm(idle_timer, 0, NULL);
             }
