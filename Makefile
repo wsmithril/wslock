@@ -1,4 +1,4 @@
-CC = clang
+CC =clang
 PKG_DEVEL = xcb xcb-dpms xcb-keysyms cairo
 
 CFLAGS  = $(shell pkg-config --cflags $(PKG_DEVEL)) -O2 \
