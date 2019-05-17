@@ -43,7 +43,7 @@ static void draw_stripes(cairo_t * cc,
 
     cairo_set_source_uint32(cc, fg);
     cairo_set_font_size(cc, TEXT_SIZE);
-    cairo_select_font_face(cc, "Sans",
+    cairo_select_font_face(cc, "sans-serif",
             CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 
     // calculate text and stripe size
@@ -98,7 +98,7 @@ void draw_input_box(cairo_t * cc,
     // U+25CF BLACK CIRCLE, UTF-8 encoding
     static const char dot[] = {0xE2, 0x97, 0x8F, 0x00};
     cairo_set_font_size(cc, TEXT_SIZE * 0.75);
-    cairo_select_font_face(cc, "Sans",
+    cairo_select_font_face(cc, "sans-serif",
             CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 
     cairo_text_extents_t te;
