@@ -165,7 +165,7 @@ void lock_screen_error(xcb_connection_t * c, xcb_screen_t * s,
     cairo_fill(xcb_cc);
 
     draw_stripes(xcb_cc, s->width_in_pixels, s->height_in_pixels,
-            COLOR_WRONG_FG, COLOR_WRONG, STRIPE_WIDTH, "ACESS DENIED");
+            COLOR_WRONG_FG, COLOR_WRONG, STRIPE_WIDTH, "ACCESS DENIED");
 
     // reset pass_wrong timer
     wtimer_rearm(pass_wrong_timer, 0, NULL);
