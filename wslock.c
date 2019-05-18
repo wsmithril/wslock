@@ -438,6 +438,7 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
         to = wtimer_list_next_timeout(tl, now); // how long shall we wait
 
         if (to > 0) to /= 1000;
+        errno = 0;
         nev = epoll_wait(epoll_fd, &ev, 1, to); // then we will wait
         switch (errno) {
             case EBADF:
