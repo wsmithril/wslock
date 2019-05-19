@@ -265,7 +265,7 @@ static void grab_everything_excpt_mediakey(
 
     int retry = 10000;
 
-    while (retry--) {
+    while (retry-- > 0) {
         pc = xcb_grab_pointer(c, false, s->root, XCB_NONE,
                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                 XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
@@ -274,10 +274,11 @@ static void grab_everything_excpt_mediakey(
             free(pr);
             break;
         }
+        free(pr);
         usleep(100);
     }
 
-    while (retry--) {
+    while (retry-- > 0) {
         kc = xcb_grab_keyboard(c, true, s->root, XCB_CURRENT_TIME,
                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
         if ((kr = xcb_grab_keyboard_reply(c, kc, NULL)) &&
@@ -285,7 +286,12 @@ static void grab_everything_excpt_mediakey(
             free(kr);
             break;
         }
+        free(kr);
+        usleep(100);
     }
+
+    if (retry <= 0)
+        die("Unable to grab pointer/keyboard");
 }
 
 static void lock(xcb_connection_t * c) {
