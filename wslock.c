@@ -445,7 +445,7 @@ static void read_passwd(xcb_connection_t * c, const char * pass) {
                 // fd to xcb connection became unusable, maybe X crashed
                 // we should exit now.
                 perror("Cannot perform epoll on xcb connection fd, "
-                       "Maybe X just crached. epoll_wait()");
+                       "Maybe X just crashed. epoll_wait()");
                 exit_now = 1;
             case EINTR:
                 // just epoll again
