@@ -12,6 +12,7 @@
 #include <sys/epoll.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
+#include <xcb/xcb_image.h>
 
 // since xcb dosen't X11/keysym.h eqvalient, for now, we needs this X11 header
 #include <X11/keysym.h>
@@ -32,6 +33,12 @@
 #include "timer.h"
 
 // global variables
+#define curs_invisible_width 8
+#define curs_invisible_height 8
+
+static unsigned char curs_invisible_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
 static char * pass_input = NULL;
 static xcb_connection_t * xcb_conn = NULL;
 
@@ -254,6 +261,56 @@ static xcb_window_t new_fullscreen_window(xcb_connection_t * c,
     return win;
 }
 
+static xcb_cursor_t create_cursor(xcb_connection_t *conn, xcb_screen_t *screen) {
+    xcb_pixmap_t bitmap;
+    xcb_pixmap_t mask;
+    xcb_cursor_t cursor;
+
+    unsigned char *curs_bits;
+    unsigned char *mask_bits;
+    int curs_w, curs_h;
+
+    curs_bits = curs_invisible_bits;
+    mask_bits = curs_invisible_bits;
+    curs_w = curs_invisible_width;
+    curs_h = curs_invisible_height;
+
+    bitmap = xcb_create_pixmap_from_bitmap_data(conn,
+                                                screen->root,
+                                                curs_bits,
+                                                curs_w,
+                                                curs_h,
+                                                1,
+                                                screen->white_pixel,
+                                                screen->black_pixel,
+                                                NULL);
+
+    mask = xcb_create_pixmap_from_bitmap_data(conn,
+                                              screen->root,
+                                              mask_bits,
+                                              curs_w,
+                                              curs_h,
+                                              1,
+                                              screen->white_pixel,
+                                              screen->black_pixel,
+                                              NULL);
+
+    cursor = xcb_generate_id(conn);
+
+    xcb_create_cursor(conn,
+                      cursor,
+                      bitmap,
+                      mask,
+                      65535, 65535, 65535,
+                      0, 0, 0,
+                      0, 0);
+
+    xcb_free_pixmap(conn, bitmap);
+    xcb_free_pixmap(conn, mask);
+
+    return cursor;
+}
+
 // TODO: still have media keys grabbed...
 static void grab_everything_excpt_mediakey(
             xcb_connection_t * c, xcb_screen_t * s){
@@ -263,12 +320,14 @@ static void grab_everything_excpt_mediakey(
     xcb_grab_keyboard_cookie_t  kc;
     xcb_grab_keyboard_reply_t * kr;
 
+    xcb_cursor_t cursor = create_cursor(c, s);
+
     int retry = 10000;
 
     while (retry--) {
         pc = xcb_grab_pointer(c, false, s->root, XCB_NONE,
                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-                XCB_NONE, XCB_NONE, XCB_CURRENT_TIME);
+                XCB_NONE, cursor, XCB_CURRENT_TIME);
         if ((pr = xcb_grab_pointer_reply(c, pc, NULL)) &&
              pr->status == XCB_GRAB_STATUS_SUCCESS) {
             free(pr);

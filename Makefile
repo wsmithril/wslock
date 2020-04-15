@@ -1,5 +1,5 @@
 CC =clang
-PKG_DEVEL = xcb xcb-dpms xcb-keysyms cairo
+PKG_DEVEL = xcb xcb-dpms xcb-keysyms xcb-image cairo
 
 CFLAGS  = $(shell pkg-config --cflags $(PKG_DEVEL)) -O2 \
           -Wall -std=c99 -g -DUSE_PAM
