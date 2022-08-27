@@ -21,6 +21,7 @@
 #else
 #   include <pwd.h>
 #   include <shadow.h>
+#   include <crypt.h>
 #endif
 
 // if we are using pam to handle auth, we then do not needs shadow
@@ -96,7 +97,9 @@ static int get_userpasswd(char * up) {
 
 // check passwd, shadow version
 static int check_pass(const char * p1, const char * p2) {
-    return strcmp(crypt(p1, p2), p2);
+    char *cpw;
+
+    return !(cpw = crypt(p1, p2)) || strcmp(p2, (const char *)cpw) != 0;
 }
 
 #else
